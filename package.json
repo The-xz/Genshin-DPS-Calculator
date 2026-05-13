@@ -1,0 +1,36 @@
+{
+  "name": "genshin-dps-calculator",
+  "version": "1.0.0",
+  "description": "A school project aiming to create an easy to use DPS/DMG, damage per second/total damage, calculator making use of a local database for storage of information.",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "dev": "tsx watch backend/src/server.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/The-xz/Genshin-DPS-Calculator.git"
+  },
+  "keywords": [],
+  "author": "Marcus Persson",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/The-xz/Genshin-DPS-Calculator/issues"
+  },
+  "homepage": "https://github.com/The-xz/Genshin-DPS-Calculator#readme",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "mysql2": "^3.22.3"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.7.0",
+    "ts-node-dev": "^2.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}
