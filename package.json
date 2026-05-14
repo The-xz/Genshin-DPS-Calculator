@@ -4,10 +4,12 @@
   "description": "A school project aiming to create an easy to use DPS/DMG, damage per second/total damage, calculator making use of a local database for storage of information.",
   "type": "module",
   "main": "index.js",
-  "scripts": {
-    "dev": "tsx watch backend/src/server.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
+"scripts": {
+  "dev": "tsx watch backend/src/server.ts",
+  "import:bennett": "tsx scripts/importBennett.ts",
+  "import:characters": "tsx scripts/importCharacters.ts",
+  "test": "echo \"Error: no test specified\" && exit 1"
+},
   "repository": {
     "type": "git",
     "url": "https://github.com/The-xz/Genshin-DPS-Calculator.git"

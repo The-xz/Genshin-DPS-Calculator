@@ -16,7 +16,24 @@ app.get("/", (_req, res) => {
 
 app.get("/characters", async (_req, res) => {
   try {
-    const [rows] = await db.query("SELECT * FROM characters");
+    const [rows] = await db.query(`
+      SELECT
+        id,
+        source_id,
+        name,
+        element,
+        weapon_type,
+        rarity,
+        base_hp,
+        base_atk,
+        base_def,
+        crit_rate,
+        crit_dmg,
+        icon_url,
+        portrait_url,
+        updated_at
+      FROM characters
+    `);
     res.json(rows);
   } catch (error) {
     console.error(error);
