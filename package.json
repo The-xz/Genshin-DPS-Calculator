@@ -8,6 +8,8 @@
   "dev": "tsx watch backend/src/server.ts",
   "import:bennett": "tsx scripts/importBennett.ts",
   "import:characters": "tsx scripts/importCharacters.ts",
+  "import:weapons": "tsx scripts/importWeapons.ts",
+  "import:artifacts": "tsx scripts/importArtifacts.ts",
   "test": "echo \"Error: no test specified\" && exit 1"
 },
   "repository": {
