@@ -69,6 +69,13 @@ type CharacterBuild = {
   };
 };
 
+type TeamCollection = {
+  id: string;
+  name: string;
+  team: CharacterBuild[];
+  updatedAt: string;
+};
+
 function createDefaultArtifacts(): EquippedArtifact[] {
   return [
     { slot: "Flower" },
@@ -348,11 +355,87 @@ function StatRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function createEmptyTeam(): CharacterBuild[] {
+  return Array.from({ length: 4 }, () => ({
+    selectedCharacterId: undefined,
+    name: "Empty Slot",
+    element: "-",
+    role: "Select character",
+    weaponType: "-",
+    selectedWeapon: undefined,
+    artifacts: createDefaultArtifacts(),
+    stats: {
+      hp: 0,
+      atk: 0,
+      def: 0,
+      critRate: 5,
+      critDmg: 50,
+      er: 100,
+      em: 0,
+    },
+  }));
+}
+
+function createCollection(name: string): TeamCollection {
+  return {
+    id: crypto.randomUUID(),
+    name,
+    team: createEmptyTeam(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 function App() {
   const [team, setTeam] = useState<CharacterBuild[]>(placeholderTeam);
   const [characters, setCharacters] = useState<DatabaseCharacter[]>([]);
   const [weapons, setWeapons] = useState<DatabaseWeapon[]>([]);
   const [artifactSets, setArtifactSets] = useState<DatabaseArtifactSet[]>([]);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [collections, setCollections] = useState<TeamCollection[]>([]);
+  const [activeCollectionId, setActiveCollectionId] = useState<string>("");
+  const [openMenuCollectionId, setOpenMenuCollectionId] = useState<string | null>(null);
+  const [renamingCollectionId, setRenamingCollectionId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [openCollectionIds, setOpenCollectionIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    const savedCollections = localStorage.getItem("genshin-dps-collections");
+
+    if (savedCollections) {
+      const parsedCollections: TeamCollection[] = JSON.parse(savedCollections);
+
+      setCollections(parsedCollections);
+
+    if (parsedCollections.length > 0) {
+      setActiveCollectionId(parsedCollections[0].id);
+      setOpenCollectionIds([parsedCollections[0].id]);
+      setTeam(parsedCollections[0].team);
+    }
+
+      return;
+    }
+
+    const firstCollection = createCollection("Current Team");
+
+    setCollections([firstCollection]);
+    setActiveCollectionId(firstCollection.id);
+    setOpenCollectionIds([firstCollection.id]);
+    setTeam(firstCollection.team);
+
+    localStorage.setItem(
+      "genshin-dps-collections",
+      JSON.stringify([firstCollection])
+    );
+  }, []);
+
+  useEffect(() => {
+    if (collections.length === 0) return;
+
+    localStorage.setItem(
+      "genshin-dps-collections",
+      JSON.stringify(collections)
+    );
+  }, [collections]);
 
   useEffect(() => {
     async function loadData() {
@@ -375,7 +458,6 @@ function App() {
         setWeapons(weaponsData);
         setArtifactSets(artifactSetsData);
         setCharacters(charactersData);
-        setTeam(placeholderTeam);
       } catch (error) {
         console.error("Failed to fetch data:", error);
       }
@@ -384,56 +466,167 @@ function App() {
     loadData();
   }, []);
 
-  function handleCharacterChange(characterIndex: number, characterId: string) {
-    setTeam((currentTeam) =>
-      currentTeam.map((character, index) => {
-        if (index !== characterIndex) return character;
+  function handleOpenCollection(collectionId: string) {
+    const collection = collections.find(
+      (currentCollection) => currentCollection.id === collectionId
+    );
 
-        const selectedCharacter = characters.find(
-          (dbCharacter) => dbCharacter.source_id === characterId
-        );
+    if (!collection) return;
 
-        if (!selectedCharacter) {
-          return {
-            selectedCharacterId: undefined,
-            name: "Empty Slot",
-            element: "-",
-            role: "Select character",
-            weaponType: "-",
-            selectedWeapon: undefined,
-            artifacts: createDefaultArtifacts(),
-            stats: {
-              hp: 0,
-              atk: 0,
-              def: 0,
-              critRate: 5,
-              critDmg: 50,
-              er: 100,
-              em: 0,
-            },
-          };
-        }
+    setActiveCollectionId(collection.id);
+    setOpenCollectionIds([collection.id]);
+    setTeam(collection.team);
+    setOpenMenuCollectionId(null);
+  }
 
-        return mapDatabaseCharacterToBuild(selectedCharacter);
-      })
+  function handleOpenCollectionBeside(collectionId: string) {
+    const collection = collections.find(
+      (currentCollection) => currentCollection.id === collectionId
+    );
+
+    if (!collection) return;
+
+    setOpenCollectionIds((currentIds) =>
+      currentIds.includes(collectionId) ? currentIds : [...currentIds, collectionId]
+    );
+
+    setActiveCollectionId(collection.id);
+    setTeam(collection.team);
+    setOpenMenuCollectionId(null);
+  }
+
+  function handleStartRename(collection: TeamCollection) {
+    setRenamingCollectionId(collection.id);
+    setRenameValue(collection.name);
+    setOpenMenuCollectionId(null);
+  }
+
+  function handleFinishRename(collectionId: string) {
+    handleRenameCollection(collectionId, renameValue.trim() || "Untitled Collection");
+    setRenamingCollectionId(null);
+    setRenameValue("");
+  }
+
+  function handleDeleteCollection(collectionId: string) {
+    const nextCollections = collections.filter(
+      (collection) => collection.id !== collectionId
+    );
+
+    if (nextCollections.length === 0) {
+      const newCollection = createCollection("Current Team");
+
+      setCollections([newCollection]);
+      setActiveCollectionId(newCollection.id);
+      setOpenCollectionIds([newCollection.id]);
+      setTeam(newCollection.team);
+      setOpenMenuCollectionId(null);
+      return;
+    }
+
+    setCollections(nextCollections);
+    setOpenCollectionIds((currentIds) =>
+      currentIds.filter((id) => id !== collectionId)
+    );
+
+    if (collectionId === activeCollectionId) {
+      setActiveCollectionId(nextCollections[0].id);
+      setOpenCollectionIds([nextCollections[0].id]);
+      setTeam(nextCollections[0].team);
+    }
+
+    setOpenMenuCollectionId(null);
+  }
+
+  function updateActiveCollectionTeam(nextTeam: CharacterBuild[]) {
+    setTeam(nextTeam);
+
+    setCollections((currentCollections) =>
+      currentCollections.map((collection) =>
+        collection.id === activeCollectionId
+          ? {
+              ...collection,
+              team: nextTeam,
+              updatedAt: new Date().toISOString(),
+            }
+          : collection
+      )
     );
   }
 
-  function handleWeaponChange(characterIndex: number, weaponId: string) {
-    setTeam((currentTeam) =>
-      currentTeam.map((character, index) => {
-        if (index !== characterIndex) return character;
+  function handleNewCollection() {
+    const collectionName = `Collection ${collections.length + 1}`;
+    const newCollection = createCollection(collectionName);
 
-        const selectedWeapon = weapons.find(
-          (weapon) => weapon.source_id === weaponId
-        );
+    setCollections((currentCollections) => [...currentCollections, newCollection]);
+    setActiveCollectionId(newCollection.id);
+    setOpenCollectionIds([newCollection.id]);
+    setTeam(newCollection.team);
+  }
 
-        return {
-          ...character,
-          selectedWeapon,
-        };
-      })
+  function handleRenameCollection(collectionId: string, newName: string) {
+    setCollections((currentCollections) =>
+      currentCollections.map((collection) =>
+        collection.id === collectionId
+          ? {
+              ...collection,
+              name: newName || "Untitled Collection",
+              updatedAt: new Date().toISOString(),
+            }
+          : collection
+      )
     );
+  }
+
+  function handleCharacterChange(characterIndex: number, characterId: string) {
+    const nextTeam = team.map((character, index) => {
+      if (index !== characterIndex) return character;
+
+      const selectedCharacter = characters.find(
+        (dbCharacter) => dbCharacter.source_id === characterId
+      );
+
+      if (!selectedCharacter) {
+        return {
+          selectedCharacterId: undefined,
+          name: "Empty Slot",
+          element: "-",
+          role: "Select character",
+          weaponType: "-",
+          selectedWeapon: undefined,
+          artifacts: createDefaultArtifacts(),
+          stats: {
+            hp: 0,
+            atk: 0,
+            def: 0,
+            critRate: 5,
+            critDmg: 50,
+            er: 100,
+            em: 0,
+          },
+        };
+      }
+
+      return mapDatabaseCharacterToBuild(selectedCharacter);
+    });
+
+    updateActiveCollectionTeam(nextTeam);
+  }
+
+  function handleWeaponChange(characterIndex: number, weaponId: string) {
+    const nextTeam = team.map((character, index) => {
+      if (index !== characterIndex) return character;
+
+      const selectedWeapon = weapons.find(
+        (weapon) => weapon.source_id === weaponId
+      );
+
+      return {
+        ...character,
+        selectedWeapon,
+      };
+    });
+
+    updateActiveCollectionTeam(nextTeam);
   }
 
   function handleArtifactChange(
@@ -441,26 +634,141 @@ function App() {
     slot: ArtifactSlot,
     artifactSetId: string
   ) {
-    setTeam((currentTeam) =>
-      currentTeam.map((character, index) => {
-        if (index !== characterIndex) return character;
+    const nextTeam = team.map((character, index) => {
+      if (index !== characterIndex) return character;
 
-        const selectedSet = artifactSets.find(
-          (set) => set.source_id === artifactSetId
-        );
+      const selectedSet = artifactSets.find(
+        (set) => set.source_id === artifactSetId
+      );
 
-        return {
-          ...character,
-          artifacts: character.artifacts.map((artifact) =>
-            artifact.slot === slot ? { ...artifact, selectedSet } : artifact
-          ),
-        };
-      })
-    );
+      return {
+        ...character,
+        artifacts: character.artifacts.map((artifact) =>
+          artifact.slot === slot ? { ...artifact, selectedSet } : artifact
+        ),
+      };
+    });
+
+    updateActiveCollectionTeam(nextTeam);
   }
 
-  return (
-    <main className="app">
+return (
+  <main
+    className={`app-shell ${
+      isSidebarOpen ? "sidebar-open" : "sidebar-collapsed"
+    }`}
+  >
+    <aside className="sidebar">
+      <div className="sidebar-header">
+        {isSidebarOpen && <h2>Collections</h2>}
+
+        <button
+          type="button"
+          className="sidebar-toggle"
+          onClick={() => setIsSidebarOpen((current) => !current)}
+          aria-label={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+        >
+          {isSidebarOpen ? "←" : "→"}
+        </button>
+      </div>
+
+      {isSidebarOpen ? (
+        <>
+          <button
+            type="button"
+            className="new-collection-button"
+            onClick={handleNewCollection}
+          >
+            + New Collection
+          </button>
+
+          <div className="collection-list">
+            {collections.map((collection) => (
+              <div
+                key={collection.id}
+                className={`collection-item ${
+                  collection.id === activeCollectionId ? "active" : ""
+                }`}
+              >
+                {renamingCollectionId === collection.id ? (
+                  <input
+                    className="collection-rename-input"
+                    value={renameValue}
+                    autoFocus
+                    onChange={(event) => setRenameValue(event.target.value)}
+                    onBlur={() => handleFinishRename(collection.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        handleFinishRename(collection.id);
+                      }
+
+                      if (event.key === "Escape") {
+                        setRenamingCollectionId(null);
+                        setRenameValue("");
+                      }
+                    }}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    className="collection-title-button"
+                    onClick={() => handleOpenCollection(collection.id)}
+                  >
+                    {collection.name}
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  className="collection-menu-button"
+                  onClick={() =>
+                    setOpenMenuCollectionId((currentId) =>
+                      currentId === collection.id ? null : collection.id
+                    )
+                  }
+                  aria-label={`Open menu for ${collection.name}`}
+                >
+                  ⋯
+                </button>
+
+                {openMenuCollectionId === collection.id && (
+                  <div className="collection-menu">
+                    <button type="button" onClick={() => handleOpenCollection(collection.id)}>
+                      Open
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCollectionBeside(collection.id)}
+                    >
+                      Open beside
+                    </button>
+
+                    <button type="button" onClick={() => handleStartRename(collection)}>
+                      Rename
+                    </button>
+
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={() => handleDeleteCollection(collection.id)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="sidebar-collapsed-content">
+          <span></span>
+        </div>
+      )}
+    </aside>
+
+    <section className="workspace">
       <header className="page-header">
         <div>
           <h1>Genshin DPS Calculator</h1>
@@ -476,7 +784,9 @@ function App() {
             characters={characters}
             weapons={weapons}
             artifactSets={artifactSets}
-            onCharacterChange={(characterId) => handleCharacterChange(index, characterId)}
+            onCharacterChange={(characterId) =>
+              handleCharacterChange(index, characterId)
+            }
             onWeaponChange={(weaponId) => handleWeaponChange(index, weaponId)}
             onArtifactChange={(slot, artifactSetId) =>
               handleArtifactChange(index, slot, artifactSetId)
@@ -487,23 +797,27 @@ function App() {
 
       <section className="results-panel">
         <h2>Damage Results</h2>
+
         <div className="result-grid">
           <div>
             <span>Total Rotation Damage</span>
             <strong>Coming soon</strong>
           </div>
+
           <div>
             <span>Rotation Time</span>
             <strong>Coming soon</strong>
           </div>
+
           <div>
             <span>DPS</span>
             <strong>Coming soon</strong>
           </div>
         </div>
       </section>
-    </main>
-  );
+    </section>
+  </main>
+);
 }
 
 export default App;
