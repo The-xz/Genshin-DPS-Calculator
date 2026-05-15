@@ -10,7 +10,20 @@ The project uses a local MySQL database to store character information, a TypeSc
 - Express + TypeScript backend
 - React + TypeScript frontend
 - Character data imported from Lunaris
+- Weapon data imported from Lunaris
+- Artifact set data imported from Lunaris
 - Character cards displayed in a 4-character team layout
+- Selectable characters for each team slot
+- Selectable weapons filtered by character weapon type
+- Selectable artifact sets for each artifact slot:
+  - Flower
+  - Plume
+  - Sands
+  - Goblet
+  - Circlet
+- Automatic artifact set bonus detection:
+  - 2-piece bonuses
+  - 4-piece bonuses
 - Character base stats shown:
   - Base HP
   - Base ATK
@@ -20,6 +33,11 @@ The project uses a local MySQL database to store character information, a TypeSc
   - Energy Recharge
   - Elemental Mastery
 - Character icons loaded from Lunaris assets
+- Weapon icons loaded from Lunaris assets
+- Artifact icons loaded from Lunaris assets
+- Collapsible collections sidebar
+- Collections saved locally with `localStorage`
+- Collection creation, opening, renaming, and deletion menu in progress
 
 ## Current Tech Stack
 
@@ -143,10 +161,12 @@ Backend runs on:
 http://localhost:3000
 ```
 
-Available endpoint:
+Available endpoints:
 
 ```txt
 GET /characters
+GET /weapons
+GET /artifact-sets
 ```
 
 ### Start the Frontend
