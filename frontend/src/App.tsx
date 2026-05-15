@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import "./App.css";
 
 type DatabaseCharacter = {
@@ -386,7 +387,7 @@ function createCollection(name: string): TeamCollection {
 }
 
 function App() {
-  const [team, setTeam] = useState<CharacterBuild[]>(placeholderTeam);
+  const [, setTeam] = useState<CharacterBuild[]>(placeholderTeam);
   const [characters, setCharacters] = useState<DatabaseCharacter[]>([]);
   const [weapons, setWeapons] = useState<DatabaseWeapon[]>([]);
   const [artifactSets, setArtifactSets] = useState<DatabaseArtifactSet[]>([]);
@@ -397,6 +398,7 @@ function App() {
   const [renamingCollectionId, setRenamingCollectionId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [openCollectionIds, setOpenCollectionIds] = useState<string[]>([]);
+  const [collectionWidths, setCollectionWidths] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const savedCollections = localStorage.getItem("genshin-dps-collections");
@@ -406,11 +408,11 @@ function App() {
 
       setCollections(parsedCollections);
 
-    if (parsedCollections.length > 0) {
-      setActiveCollectionId(parsedCollections[0].id);
-      setOpenCollectionIds([parsedCollections[0].id]);
-      setTeam(parsedCollections[0].team);
-    }
+      if (parsedCollections.length > 0) {
+        setActiveCollectionId(parsedCollections[0].id);
+        setOpenCollectionIds([parsedCollections[0].id]);
+        setTeam(parsedCollections[0].team);
+      }
 
       return;
     }
@@ -487,12 +489,74 @@ function App() {
     if (!collection) return;
 
     setOpenCollectionIds((currentIds) =>
-      currentIds.includes(collectionId) ? currentIds : [...currentIds, collectionId]
+      currentIds.includes(collectionId)
+        ? currentIds
+        : [...currentIds, collectionId]
     );
 
     setActiveCollectionId(collection.id);
     setTeam(collection.team);
     setOpenMenuCollectionId(null);
+  }
+
+  function handleCloseOpenCollection(collectionId: string) {
+    const nextOpenIds = openCollectionIds.filter((id) => id !== collectionId);
+
+    if (nextOpenIds.length === 0) {
+      return;
+    }
+
+    setOpenCollectionIds(nextOpenIds);
+
+    if (collectionId === activeCollectionId) {
+      const nextActiveCollection = collections.find(
+        (collection) => collection.id === nextOpenIds[0]
+      );
+
+      if (!nextActiveCollection) return;
+
+      setActiveCollectionId(nextActiveCollection.id);
+      setTeam(nextActiveCollection.team);
+    }
+  }
+
+  function handleStartResizeCollection(
+    event: ReactPointerEvent<HTMLDivElement>,
+    collectionId: string
+  ) {
+    event.preventDefault();
+
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const startX = event.clientX;
+    const currentWidth =
+      collectionWidths[collectionId] ??
+      event.currentTarget.parentElement?.getBoundingClientRect().width ??
+      1200;
+
+    function handlePointerMove(moveEvent: globalThis.PointerEvent) {
+      const nextWidth = Math.max(
+        1050,
+        Math.min(1800, currentWidth + moveEvent.clientX - startX)
+      );
+
+      setCollectionWidths((currentWidths) => ({
+        ...currentWidths,
+        [collectionId]: nextWidth,
+      }));
+    }
+
+    function handlePointerUp() {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
   }
 
   function handleStartRename(collection: TeamCollection) {
@@ -502,7 +566,11 @@ function App() {
   }
 
   function handleFinishRename(collectionId: string) {
-    handleRenameCollection(collectionId, renameValue.trim() || "Untitled Collection");
+    handleRenameCollection(
+      collectionId,
+      renameValue.trim() || "Untitled Collection"
+    );
+
     setRenamingCollectionId(null);
     setRenameValue("");
   }
@@ -537,12 +605,10 @@ function App() {
     setOpenMenuCollectionId(null);
   }
 
-  function updateActiveCollectionTeam(nextTeam: CharacterBuild[]) {
-    setTeam(nextTeam);
-
+  function updateCollectionTeam(collectionId: string, nextTeam: CharacterBuild[]) {
     setCollections((currentCollections) =>
       currentCollections.map((collection) =>
-        collection.id === activeCollectionId
+        collection.id === collectionId
           ? {
               ...collection,
               team: nextTeam,
@@ -551,34 +617,24 @@ function App() {
           : collection
       )
     );
+
+    if (collectionId === activeCollectionId) {
+      setTeam(nextTeam);
+    }
   }
 
-  function handleNewCollection() {
-    const collectionName = `Collection ${collections.length + 1}`;
-    const newCollection = createCollection(collectionName);
-
-    setCollections((currentCollections) => [...currentCollections, newCollection]);
-    setActiveCollectionId(newCollection.id);
-    setOpenCollectionIds([newCollection.id]);
-    setTeam(newCollection.team);
-  }
-
-  function handleRenameCollection(collectionId: string, newName: string) {
-    setCollections((currentCollections) =>
-      currentCollections.map((collection) =>
-        collection.id === collectionId
-          ? {
-              ...collection,
-              name: newName || "Untitled Collection",
-              updatedAt: new Date().toISOString(),
-            }
-          : collection
-      )
+  function handleCollectionCharacterChange(
+    collectionId: string,
+    characterIndex: number,
+    characterId: string
+  ) {
+    const collection = collections.find(
+      (currentCollection) => currentCollection.id === collectionId
     );
-  }
 
-  function handleCharacterChange(characterIndex: number, characterId: string) {
-    const nextTeam = team.map((character, index) => {
+    if (!collection) return;
+
+    const nextTeam = collection.team.map((character, index) => {
       if (index !== characterIndex) return character;
 
       const selectedCharacter = characters.find(
@@ -609,11 +665,23 @@ function App() {
       return mapDatabaseCharacterToBuild(selectedCharacter);
     });
 
-    updateActiveCollectionTeam(nextTeam);
+    setActiveCollectionId(collectionId);
+    setTeam(nextTeam);
+    updateCollectionTeam(collectionId, nextTeam);
   }
 
-  function handleWeaponChange(characterIndex: number, weaponId: string) {
-    const nextTeam = team.map((character, index) => {
+  function handleCollectionWeaponChange(
+    collectionId: string,
+    characterIndex: number,
+    weaponId: string
+  ) {
+    const collection = collections.find(
+      (currentCollection) => currentCollection.id === collectionId
+    );
+
+    if (!collection) return;
+
+    const nextTeam = collection.team.map((character, index) => {
       if (index !== characterIndex) return character;
 
       const selectedWeapon = weapons.find(
@@ -626,15 +694,24 @@ function App() {
       };
     });
 
-    updateActiveCollectionTeam(nextTeam);
+    setActiveCollectionId(collectionId);
+    setTeam(nextTeam);
+    updateCollectionTeam(collectionId, nextTeam);
   }
 
-  function handleArtifactChange(
+  function handleCollectionArtifactChange(
+    collectionId: string,
     characterIndex: number,
     slot: ArtifactSlot,
     artifactSetId: string
   ) {
-    const nextTeam = team.map((character, index) => {
+    const collection = collections.find(
+      (currentCollection) => currentCollection.id === collectionId
+    );
+
+    if (!collection) return;
+
+    const nextTeam = collection.team.map((character, index) => {
       if (index !== characterIndex) return character;
 
       const selectedSet = artifactSets.find(
@@ -649,175 +726,267 @@ function App() {
       };
     });
 
-    updateActiveCollectionTeam(nextTeam);
+    setActiveCollectionId(collectionId);
+    setTeam(nextTeam);
+    updateCollectionTeam(collectionId, nextTeam);
   }
 
-return (
-  <main
-    className={`app-shell ${
-      isSidebarOpen ? "sidebar-open" : "sidebar-collapsed"
-    }`}
-  >
-    <aside className="sidebar">
-      <div className="sidebar-header">
-        {isSidebarOpen && <h2>Collections</h2>}
+  function handleNewCollection() {
+    const collectionName = `Collection ${collections.length + 1}`;
+    const newCollection = createCollection(collectionName);
 
-        <button
-          type="button"
-          className="sidebar-toggle"
-          onClick={() => setIsSidebarOpen((current) => !current)}
-          aria-label={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
-        >
-          {isSidebarOpen ? "←" : "→"}
-        </button>
-      </div>
+    setCollections((currentCollections) => [...currentCollections, newCollection]);
+    setActiveCollectionId(newCollection.id);
+    setOpenCollectionIds([newCollection.id]);
+    setTeam(newCollection.team);
+  }
 
-      {isSidebarOpen ? (
-        <>
+  function handleRenameCollection(collectionId: string, newName: string) {
+    setCollections((currentCollections) =>
+      currentCollections.map((collection) =>
+        collection.id === collectionId
+          ? {
+              ...collection,
+              name: newName || "Untitled Collection",
+              updatedAt: new Date().toISOString(),
+            }
+          : collection
+      )
+    );
+  }
+
+  const openCollections = openCollectionIds
+    .map((collectionId) =>
+      collections.find((collection) => collection.id === collectionId)
+    )
+    .filter((collection): collection is TeamCollection => Boolean(collection));
+
+  return (
+    <main
+      className={`app-shell ${
+        isSidebarOpen ? "sidebar-open" : "sidebar-collapsed"
+      }`}
+    >
+      <aside className="sidebar">
+        <div className="sidebar-header">
+          {isSidebarOpen && <h2>Collections</h2>}
+
           <button
             type="button"
-            className="new-collection-button"
-            onClick={handleNewCollection}
+            className="sidebar-toggle"
+            onClick={() => setIsSidebarOpen((current) => !current)}
+            aria-label={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
           >
-            + New Collection
+            {isSidebarOpen ? "←" : "→"}
           </button>
+        </div>
 
-          <div className="collection-list">
-            {collections.map((collection) => (
-              <div
-                key={collection.id}
-                className={`collection-item ${
-                  collection.id === activeCollectionId ? "active" : ""
-                }`}
-              >
-                {renamingCollectionId === collection.id ? (
-                  <input
-                    className="collection-rename-input"
-                    value={renameValue}
-                    autoFocus
-                    onChange={(event) => setRenameValue(event.target.value)}
-                    onBlur={() => handleFinishRename(collection.id)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        handleFinishRename(collection.id);
-                      }
+        {isSidebarOpen ? (
+          <>
+            <button
+              type="button"
+              className="new-collection-button"
+              onClick={handleNewCollection}
+            >
+              + New Collection
+            </button>
 
-                      if (event.key === "Escape") {
-                        setRenamingCollectionId(null);
-                        setRenameValue("");
-                      }
-                    }}
-                  />
-                ) : (
+            <div className="collection-list">
+              {collections.map((collection) => (
+                <div
+                  key={collection.id}
+                  className={`collection-item ${
+                    collection.id === activeCollectionId ? "active" : ""
+                  }`}
+                >
+                  {renamingCollectionId === collection.id ? (
+                    <input
+                      className="collection-rename-input"
+                      value={renameValue}
+                      autoFocus
+                      onChange={(event) => setRenameValue(event.target.value)}
+                      onBlur={() => handleFinishRename(collection.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          handleFinishRename(collection.id);
+                        }
+
+                        if (event.key === "Escape") {
+                          setRenamingCollectionId(null);
+                          setRenameValue("");
+                        }
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="collection-title-button"
+                      onClick={() => handleOpenCollection(collection.id)}
+                    >
+                      {collection.name}
+                    </button>
+                  )}
+
                   <button
                     type="button"
-                    className="collection-title-button"
-                    onClick={() => handleOpenCollection(collection.id)}
+                    className="collection-menu-button"
+                    onClick={() =>
+                      setOpenMenuCollectionId((currentId) =>
+                        currentId === collection.id ? null : collection.id
+                      )
+                    }
+                    aria-label={`Open menu for ${collection.name}`}
+                  >
+                    ⋯
+                  </button>
+
+                  {openMenuCollectionId === collection.id && (
+                    <div className="collection-menu">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenCollection(collection.id)}
+                      >
+                        Open
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleOpenCollectionBeside(collection.id)
+                        }
+                      >
+                        Open beside
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleStartRename(collection)}
+                      >
+                        Rename
+                      </button>
+
+                      <button
+                        type="button"
+                        className="danger"
+                        onClick={() => handleDeleteCollection(collection.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="sidebar-collapsed-content">
+            <span></span>
+          </div>
+        )}
+      </aside>
+
+      <section className="workspace">
+        <header className="page-header">
+          <div>
+            <h1>Genshin DPS Calculator</h1>
+            <p>Team build overview</p>
+          </div>
+        </header>
+
+        <div className="workspace-collections">
+          {openCollections.map((collection) => {
+            const isActive = collection.id === activeCollectionId;
+
+            return (
+              <section
+              key={collection.id}
+              className={`collection-workspace-panel ${isActive ? "active" : ""}`}
+              style={{
+                width: collectionWidths[collection.id] ?? 1200,
+              }}
+            >
+                <div className="collection-workspace-header">
+                  <button
+                    type="button"
+                    className="collection-workspace-title"
+                    onClick={() => {
+                      setActiveCollectionId(collection.id);
+                      setTeam(collection.team);
+                    }}
                   >
                     {collection.name}
                   </button>
-                )}
 
-                <button
-                  type="button"
-                  className="collection-menu-button"
-                  onClick={() =>
-                    setOpenMenuCollectionId((currentId) =>
-                      currentId === collection.id ? null : collection.id
-                    )
-                  }
-                  aria-label={`Open menu for ${collection.name}`}
-                >
-                  ⋯
-                </button>
+                  <button
+                    type="button"
+                    className="collection-workspace-close"
+                    onClick={() => handleCloseOpenCollection(collection.id)}
+                    aria-label={`Close ${collection.name}`}
+                  >
+                    ×
+                  </button>
+                </div>
 
-                {openMenuCollectionId === collection.id && (
-                  <div className="collection-menu">
-                    <button type="button" onClick={() => handleOpenCollection(collection.id)}>
-                      Open
-                    </button>
+                <section className="team-grid">
+                  {collection.team.map((character, index) => (
+                    <CharacterCard
+                      key={`${collection.id}-${character.name}-${index}`}
+                      character={character}
+                      characters={characters}
+                      weapons={weapons}
+                      artifactSets={artifactSets}
+                      onCharacterChange={(characterId) =>
+                        handleCollectionCharacterChange(collection.id, index, characterId)
+                      }
+                      onWeaponChange={(weaponId) =>
+                        handleCollectionWeaponChange(collection.id, index, weaponId)
+                      }
+                      onArtifactChange={(slot, artifactSetId) =>
+                        handleCollectionArtifactChange(
+                          collection.id,
+                          index,
+                          slot,
+                          artifactSetId
+                        )
+                      }
+                    />
+                  ))}
+                </section>
 
-                    <button
-                      type="button"
-                      onClick={() => handleOpenCollectionBeside(collection.id)}
-                    >
-                      Open beside
-                    </button>
+                <section className="results-panel">
+                  <h2>Damage Results</h2>
 
-                    <button type="button" onClick={() => handleStartRename(collection)}>
-                      Rename
-                    </button>
+                  <div className="result-grid">
+                    <div>
+                      <span>Total Rotation Damage</span>
+                      <strong>Coming soon</strong>
+                    </div>
 
-                    <button
-                      type="button"
-                      className="danger"
-                      onClick={() => handleDeleteCollection(collection.id)}
-                    >
-                      Delete
-                    </button>
+                    <div>
+                      <span>Rotation Time</span>
+                      <strong>Coming soon</strong>
+                    </div>
+
+                    <div>
+                      <span>DPS</span>
+                      <strong>Coming soon</strong>
+                    </div>
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </>
-      ) : (
-        <div className="sidebar-collapsed-content">
-          <span></span>
-        </div>
-      )}
-    </aside>
+                </section>
 
-    <section className="workspace">
-      <header className="page-header">
-        <div>
-          <h1>Genshin DPS Calculator</h1>
-          <p>Team build overview</p>
-        </div>
-      </header>
-
-      <section className="team-grid">
-        {team.map((character, index) => (
-          <CharacterCard
-            key={`${character.name}-${index}`}
-            character={character}
-            characters={characters}
-            weapons={weapons}
-            artifactSets={artifactSets}
-            onCharacterChange={(characterId) =>
-              handleCharacterChange(index, characterId)
-            }
-            onWeaponChange={(weaponId) => handleWeaponChange(index, weaponId)}
-            onArtifactChange={(slot, artifactSetId) =>
-              handleArtifactChange(index, slot, artifactSetId)
-            }
-          />
-        ))}
-      </section>
-
-      <section className="results-panel">
-        <h2>Damage Results</h2>
-
-        <div className="result-grid">
-          <div>
-            <span>Total Rotation Damage</span>
-            <strong>Coming soon</strong>
-          </div>
-
-          <div>
-            <span>Rotation Time</span>
-            <strong>Coming soon</strong>
-          </div>
-
-          <div>
-            <span>DPS</span>
-            <strong>Coming soon</strong>
-          </div>
+                <div
+                  className="collection-resize-handle"
+                  onPointerDown={(event) =>
+                    handleStartResizeCollection(event, collection.id)
+                  }
+                />
+              </section>
+            );
+          })}
         </div>
       </section>
-    </section>
-  </main>
-);
+    </main>
+  );
 }
 
 export default App;
