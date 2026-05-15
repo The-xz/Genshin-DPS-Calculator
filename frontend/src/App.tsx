@@ -50,6 +50,7 @@ type EquippedArtifact = {
 };
 
 type CharacterBuild = {
+  selectedCharacterId?: string;
   name: string;
   element: string;
   role: string;
@@ -79,6 +80,7 @@ function createDefaultArtifacts(): EquippedArtifact[] {
 }
 
 const placeholderTeam: CharacterBuild[] = Array.from({ length: 4 }, () => ({
+  selectedCharacterId: undefined,
   name: "Empty Slot",
   element: "-",
   role: "Select character",
@@ -98,6 +100,7 @@ const placeholderTeam: CharacterBuild[] = Array.from({ length: 4 }, () => ({
 
 function mapDatabaseCharacterToBuild(character: DatabaseCharacter): CharacterBuild {
   return {
+    selectedCharacterId: character.source_id,
     name: character.name,
     element: character.element,
     role: "Support",
@@ -148,14 +151,18 @@ function getActiveArtifactBonuses(artifacts: EquippedArtifact[]) {
 
 function CharacterCard({
   character,
+  characters,
   weapons,
   artifactSets,
+  onCharacterChange,
   onWeaponChange,
   onArtifactChange,
 }: {
   character: CharacterBuild;
+  characters: DatabaseCharacter[];
   weapons: DatabaseWeapon[];
   artifactSets: DatabaseArtifactSet[];
+  onCharacterChange: (characterId: string) => void;
   onWeaponChange: (weaponId: string) => void;
   onArtifactChange: (slot: ArtifactSlot, artifactSetId: string) => void;
 }) {
@@ -178,7 +185,24 @@ function CharacterCard({
           character.name.charAt(0)
         )}
       </div>
+      <div className="character-selector">
+        <select
+          className="character-select"
+          value={character.selectedCharacterId ?? ""}
+          onChange={(event) => onCharacterChange(event.target.value)}
+        >
+          <option value="">Select character</option>
 
+          {characters.map((availableCharacter) => (
+            <option
+              key={availableCharacter.source_id}
+              value={availableCharacter.source_id}
+            >
+              {availableCharacter.name}
+            </option>
+          ))}
+        </select>
+      </div>
       <h2>{character.name}</h2>
       <p className="subtext">
         {character.element} • {character.role}
@@ -326,6 +350,7 @@ function StatRow({ label, value }: { label: string; value: string }) {
 
 function App() {
   const [team, setTeam] = useState<CharacterBuild[]>(placeholderTeam);
+  const [characters, setCharacters] = useState<DatabaseCharacter[]>([]);
   const [weapons, setWeapons] = useState<DatabaseWeapon[]>([]);
   const [artifactSets, setArtifactSets] = useState<DatabaseArtifactSet[]>([]);
 
@@ -349,18 +374,8 @@ function App() {
 
         setWeapons(weaponsData);
         setArtifactSets(artifactSetsData);
-
-        const importedCharacters = charactersData.map(
-          mapDatabaseCharacterToBuild
-        );
-
-        const nextTeam = [...placeholderTeam];
-
-        importedCharacters.slice(0, 4).forEach((character, index) => {
-          nextTeam[index] = character;
-        });
-
-        setTeam(nextTeam);
+        setCharacters(charactersData);
+        setTeam(placeholderTeam);
       } catch (error) {
         console.error("Failed to fetch data:", error);
       }
@@ -368,6 +383,41 @@ function App() {
 
     loadData();
   }, []);
+
+  function handleCharacterChange(characterIndex: number, characterId: string) {
+    setTeam((currentTeam) =>
+      currentTeam.map((character, index) => {
+        if (index !== characterIndex) return character;
+
+        const selectedCharacter = characters.find(
+          (dbCharacter) => dbCharacter.source_id === characterId
+        );
+
+        if (!selectedCharacter) {
+          return {
+            selectedCharacterId: undefined,
+            name: "Empty Slot",
+            element: "-",
+            role: "Select character",
+            weaponType: "-",
+            selectedWeapon: undefined,
+            artifacts: createDefaultArtifacts(),
+            stats: {
+              hp: 0,
+              atk: 0,
+              def: 0,
+              critRate: 5,
+              critDmg: 50,
+              er: 100,
+              em: 0,
+            },
+          };
+        }
+
+        return mapDatabaseCharacterToBuild(selectedCharacter);
+      })
+    );
+  }
 
   function handleWeaponChange(characterIndex: number, weaponId: string) {
     setTeam((currentTeam) =>
@@ -423,8 +473,10 @@ function App() {
           <CharacterCard
             key={`${character.name}-${index}`}
             character={character}
+            characters={characters}
             weapons={weapons}
             artifactSets={artifactSets}
+            onCharacterChange={(characterId) => handleCharacterChange(index, characterId)}
             onWeaponChange={(weaponId) => handleWeaponChange(index, weaponId)}
             onArtifactChange={(slot, artifactSetId) =>
               handleArtifactChange(index, slot, artifactSetId)
