@@ -650,6 +650,78 @@ button {
   font-size: 12px;
 }
 
+.artifact-stats-editor {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding-left: 0;
+}
+
+.artifact-main-stat-row,
+.artifact-substat-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px;
+  gap: 6px;
+}
+
+.artifact-stat-select,
+.artifact-stat-input {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-input);
+  color: var(--text-main);
+  padding: 6px 8px;
+  font-size: 11px;
+  outline: none;
+  appearance: textfield;
+}
+
+.artifact-stat-input::-webkit-outer-spin-button,
+.artifact-stat-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
+.artifact-stat-select:focus,
+.artifact-stat-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(124, 140, 255, 0.14);
+}
+
+.artifact-stat-select:disabled,
+.artifact-stat-input:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+  color: var(--text-muted);
+}
+
+.artifact-edit-toggle {
+  grid-column: 1 / -1;
+  width: 100%;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-input);
+  color: var(--text-muted);
+  border-radius: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.artifact-edit-toggle:hover {
+  background: var(--bg-card-soft);
+  color: var(--text-main);
+  border-color: var(--border-strong);
+}
+
+.artifact-row.expanded {
+  padding-bottom: 6px;
+}
+
 .collection-workspace-panel .weapon-preview {
   gap: 8px;
   margin-top: 8px;
@@ -727,6 +799,131 @@ button {
   font-size: 22px;
 }
 
+.artifact-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.artifact-summary-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-input);
+  border-radius: 10px;
+  padding: 9px 10px;
+  min-height: 48px;
+}
+
+.artifact-summary-left {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.artifact-summary-left strong {
+  display: block;
+  max-width: 100%;
+  font-size: 12px;
+  color: var(--text-main);
+  white-space: normal;
+  line-height: 1.2;
+}
+
+.artifact-summary-left span {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.artifact-summary-icon {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 3px;
+}
+
+.artifact-summary-badges {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.artifact-summary-badges span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(124, 140, 255, 0.45);
+  background: rgba(124, 140, 255, 0.12);
+  color: var(--text-soft);
+  border-radius: 999px;
+  padding: 3px 7px;
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.artifact-editor-toggle {
+  width: 100%;
+  margin-top: 8px;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-input);
+  color: var(--text-muted);
+  border-radius: 9px;
+  padding: 7px 9px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.artifact-editor-toggle:hover {
+  background: var(--bg-card-soft);
+  color: var(--text-main);
+  border-color: var(--border-strong);
+}
+
+.artifact-editor-panel {
+  margin-top: 10px;
+  border-top: 1px solid var(--border-soft);
+  padding-top: 10px;
+}
+
+.artifact-editor-bonuses {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.artifact-editor-bonus {
+  border: 1px solid var(--border-soft);
+  background: rgba(255, 255, 255, 0.025);
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.artifact-editor-bonus strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--text-main);
+}
+
+.artifact-editor-bonus span {
+  display: block;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
 .collection-workspace-header {
   display: flex;
   align-items: center;
@@ -780,8 +977,11 @@ button {
   }
 
   .collection-workspace-panel {
-    flex-basis: 760px;
-    min-width: 760px;
+    min-width: 900px;
+  }
+
+  .collection-workspace-panel .team-grid {
+    grid-template-columns: repeat(2, minmax(260px, 1fr));
   }
 }
 

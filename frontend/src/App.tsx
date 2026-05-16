@@ -45,9 +45,17 @@ type DatabaseArtifactSet = {
 
 type ArtifactSlot = "Flower" | "Plume" | "Sands" | "Goblet" | "Circlet";
 
+type ArtifactSubstat = {
+  type: string;
+  value?: string;
+};
+
 type EquippedArtifact = {
   slot: ArtifactSlot;
   selectedSet?: DatabaseArtifactSet;
+  mainStatType?: string;
+  mainStatValue?: string;
+  substats: ArtifactSubstat[];
 };
 
 type CharacterBuild = {
@@ -77,13 +85,45 @@ type TeamCollection = {
   updatedAt: string;
 };
 
+const artifactStatOptions = [
+  "HP",
+  "HP%",
+  "ATK",
+  "ATK%",
+  "DEF",
+  "DEF%",
+  "Elemental Mastery",
+  "Energy Recharge%",
+  "CRIT Rate%",
+  "CRIT DMG%",
+  "Pyro DMG Bonus%",
+  "Hydro DMG Bonus%",
+  "Cryo DMG Bonus%",
+  "Electro DMG Bonus%",
+  "Anemo DMG Bonus%",
+  "Geo DMG Bonus%",
+  "Dendro DMG Bonus%",
+  "Physical DMG Bonus%",
+  "Healing Bonus%",
+];
+
 function createDefaultArtifacts(): EquippedArtifact[] {
   return [
-    { slot: "Flower" },
-    { slot: "Plume" },
-    { slot: "Sands" },
-    { slot: "Goblet" },
-    { slot: "Circlet" },
+    {
+      slot: "Flower",
+      mainStatType: "HP",
+      mainStatValue: "4780",
+      substats: [],
+    },
+    {
+      slot: "Plume",
+      mainStatType: "ATK",
+      mainStatValue: "311",
+      substats: [],
+    },
+    { slot: "Sands", substats: [] },
+    { slot: "Goblet", substats: [] },
+    { slot: "Circlet", substats: [] },
   ];
 }
 
@@ -130,7 +170,7 @@ function mapDatabaseCharacterToBuild(character: DatabaseCharacter): CharacterBui
   };
 }
 
-function getActiveArtifactBonuses(artifacts: EquippedArtifact[]) {
+function getArtifactSummary(artifacts: EquippedArtifact[]) {
   const setCounts = new Map<
     string,
     {
@@ -154,7 +194,44 @@ function getActiveArtifactBonuses(artifacts: EquippedArtifact[]) {
     }
   });
 
-  return Array.from(setCounts.values()).filter(({ count }) => count >= 2);
+  return Array.from(setCounts.values());
+}
+
+function normalizeArtifactInput(value: string): string {
+  const normalizedValue = value.replace(",", ".");
+
+  // Allow empty input
+  if (normalizedValue === "") return "";
+
+  // Allow numbers like:
+  // 5
+  // 5.
+  // 5.4
+  // .4
+  const isValidNumberInput = /^(\d+)?(\.)?(\d+)?$/.test(normalizedValue);
+
+  if (!isValidNumberInput) {
+    return "";
+  }
+
+  return normalizedValue;
+}
+
+function normalizeSavedArtifactValue(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+
+  const normalizedValue = String(value).replace(",", ".");
+
+  if (
+    normalizedValue === "" ||
+    normalizedValue === "NaN" ||
+    normalizedValue === "null" ||
+    normalizedValue === "undefined"
+  ) {
+    return undefined;
+  }
+
+  return normalizedValue;
 }
 
 function CharacterCard({
@@ -165,6 +242,8 @@ function CharacterCard({
   onCharacterChange,
   onWeaponChange,
   onArtifactChange,
+  onArtifactMainStatChange,
+  onArtifactSubstatChange,
 }: {
   character: CharacterBuild;
   characters: DatabaseCharacter[];
@@ -173,12 +252,25 @@ function CharacterCard({
   onCharacterChange: (characterId: string) => void;
   onWeaponChange: (weaponId: string) => void;
   onArtifactChange: (slot: ArtifactSlot, artifactSetId: string) => void;
+  onArtifactMainStatChange: (
+    slot: ArtifactSlot,
+    mainStatType: string,
+    mainStatValue: string | undefined
+  ) => void;
+  onArtifactSubstatChange: (
+    slot: ArtifactSlot,
+    substatIndex: number,
+    type: string,
+    value: string | undefined
+  ) => void;
 }) {
   const compatibleWeapons = weapons.filter(
     (weapon) => weapon.weapon_type === character.weaponType
   );
 
-  const activeArtifactBonuses = getActiveArtifactBonuses(character.artifacts);
+  const artifactSummary = getArtifactSummary(character.artifacts);
+
+  const [isArtifactEditorOpen, setIsArtifactEditorOpen] = useState(false);
 
   return (
     <section className="character-card">
@@ -269,61 +361,195 @@ function CharacterCard({
 
         {character.name !== "Empty Slot" ? (
           <>
-            <div className="artifact-list">
-              {character.artifacts.map((artifact) => (
-                <div className="artifact-row" key={artifact.slot}>
-                  <span className="artifact-slot">{artifact.slot}</span>
-                  <div className="artifact-picker">
-                    <div className="artifact-icon-box">
-                      {artifact.selectedSet ? (
-                        <img
-                          src={`https://api.lunaris.moe/data/assets/artifacts/${artifact.selectedSet.icon_url}.webp`}
-                          alt={artifact.selectedSet.name}
-                          className="artifact-icon"
-                        />
-                      ) : (
-                        <span>-</span>
-                      )}
+            <div className="artifact-summary-list">
+              {artifactSummary.length > 0 ? (
+                artifactSummary.map(({ set, count }) => (
+                  <div className="artifact-summary-item" key={set.source_id}>
+                    <div className="artifact-summary-left">
+                      <img
+                        src={`https://api.lunaris.moe/data/assets/artifacts/${set.icon_url}.webp`}
+                        alt={set.name}
+                        className="artifact-summary-icon"
+                      />
+
+                      <div>
+                        <strong>{set.name}</strong>
+                        <span>
+                          {count} piece{count === 1 ? "" : "s"}
+                        </span>
+                      </div>
                     </div>
 
-                    <select
-                      className="artifact-select"
-                      value={artifact.selectedSet?.source_id ?? ""}
-                      onChange={(event) =>
-                        onArtifactChange(artifact.slot, event.target.value)
-                      }
-                    >
-                      <option value="">No set</option>
-
-                      {artifactSets.map((set) => (
-                        <option key={set.source_id} value={set.source_id}>
-                          {set.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="artifact-bonuses">
-              <h4>Active Bonuses</h4>
-
-              {activeArtifactBonuses.length > 0 ? (
-                activeArtifactBonuses.map(({ set, count }) => (
-                  <div className="artifact-bonus" key={set.source_id}>
-                    <strong>
-                      {set.name} x{count}
-                    </strong>
-
-                    {count >= 2 && <span>2pc: {set.two_piece_bonus}</span>}
-                    {count >= 4 && <span>4pc: {set.four_piece_bonus}</span>}
+                    <div className="artifact-summary-badges">
+                      {count >= 2 && <span>2pc</span>}
+                      {count >= 4 && <span>4pc</span>}
+                    </div>
                   </div>
                 ))
               ) : (
-                <span>No active set bonuses</span>
+                <span>No artifacts selected</span>
               )}
             </div>
+
+            <button
+              type="button"
+              className="artifact-editor-toggle"
+              onClick={() => setIsArtifactEditorOpen((current) => !current)}
+            >
+              {isArtifactEditorOpen ? "Hide artifact editor" : "Edit artifacts"}
+            </button>
+
+            {isArtifactEditorOpen && (
+              <div className="artifact-editor-panel">
+                <div className="artifact-editor-bonuses">
+                  {artifactSummary
+                    .filter(({ count }) => count >= 2)
+                    .map(({ set, count }) => (
+                      <div className="artifact-editor-bonus" key={set.source_id}>
+                        <strong>{set.name}</strong>
+
+                        {count >= 2 && <span>2pc: {set.two_piece_bonus}</span>}
+                        {count >= 4 && <span>4pc: {set.four_piece_bonus}</span>}
+                      </div>
+                    ))}
+                </div>
+
+                <div className="artifact-list">
+                  {character.artifacts.map((artifact) => {
+                    return (
+                      <div
+                        className="artifact-row"
+                        key={artifact.slot}
+                      >
+                        <span className="artifact-slot">{artifact.slot}</span>
+
+                        <div className="artifact-picker">
+                          <div className="artifact-icon-box">
+                            {artifact.selectedSet ? (
+                              <img
+                                src={`https://api.lunaris.moe/data/assets/artifacts/${artifact.selectedSet.icon_url}.webp`}
+                                alt={artifact.selectedSet.name}
+                                className="artifact-icon"
+                              />
+                            ) : (
+                              <span>-</span>
+                            )}
+                          </div>
+
+                          <select
+                            className="artifact-select"
+                            value={artifact.selectedSet?.source_id ?? ""}
+                            onChange={(event) =>
+                              onArtifactChange(artifact.slot, event.target.value)
+                            }
+                          >
+                            <option value="">No set</option>
+
+                            {artifactSets.map((set) => (
+                              <option key={set.source_id} value={set.source_id}>
+                                {set.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="artifact-stats-editor">
+                          <div className="artifact-main-stat-row">
+                            <select
+                              className="artifact-stat-select"
+                              value={artifact.mainStatType ?? ""}
+                              disabled={artifact.slot === "Flower" || artifact.slot === "Plume"}
+                              onChange={(event) =>
+                                onArtifactMainStatChange(
+                                  artifact.slot,
+                                  event.target.value,
+                                  artifact.mainStatValue
+                                )
+                              }
+                            >
+                              <option value="">Main stat</option>
+
+                              {artifactStatOptions.map((stat) => (
+                                <option key={stat} value={stat}>
+                                  {stat}
+                                </option>
+                              ))}
+                            </select>
+
+                            <input
+                              className="artifact-stat-input"
+                              type="text"
+                              inputMode="decimal"
+                              value={artifact.mainStatValue ?? ""}
+                              placeholder="Value"
+                              disabled={artifact.slot === "Flower" || artifact.slot === "Plume"}
+                              onChange={(event) => {
+                                const nextValue = normalizeArtifactInput(event.target.value);
+
+                                onArtifactMainStatChange(
+                                  artifact.slot,
+                                  artifact.mainStatType ?? "",
+                                  nextValue === "" ? undefined : nextValue
+                                );
+                              }}
+                            />
+                          </div>
+
+                          <div className="artifact-substats">
+                            {[0, 1, 2, 3].map((substatIndex) => {
+                              const substat = artifact.substats?.[substatIndex];
+
+                              return (
+                                <div className="artifact-substat-row" key={substatIndex}>
+                                  <select
+                                    className="artifact-stat-select"
+                                    value={substat?.type ?? ""}
+                                    onChange={(event) =>
+                                      onArtifactSubstatChange(
+                                        artifact.slot,
+                                        substatIndex,
+                                        event.target.value,
+                                        substat?.value
+                                      )
+                                    }
+                                  >
+                                    <option value="">Substat</option>
+
+                                    {artifactStatOptions.map((stat) => (
+                                      <option key={stat} value={stat}>
+                                        {stat}
+                                      </option>
+                                    ))}
+                                  </select>
+
+                                  <input
+                                    className="artifact-stat-input"
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={substat?.value ?? ""}
+                                    placeholder="Value"
+                                    onChange={(event) => {
+                                      const nextValue = normalizeArtifactInput(event.target.value);
+
+                                      onArtifactSubstatChange(
+                                        artifact.slot,
+                                        substatIndex,
+                                        substat?.type ?? "",
+                                        nextValue === "" ? undefined : nextValue
+                                      );
+                                    }}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <>
@@ -386,6 +612,40 @@ function createCollection(name: string): TeamCollection {
   };
 }
 
+function normalizeTeam(team: CharacterBuild[]): CharacterBuild[] {
+  return team.map((character) => ({
+    ...character,
+    artifacts: character.artifacts.map((artifact) => ({
+      ...artifact,
+      mainStatType:
+        artifact.mainStatType ??
+        (artifact.slot === "Flower"
+          ? "HP"
+          : artifact.slot === "Plume"
+            ? "ATK"
+            : undefined),
+      mainStatValue:
+        normalizeSavedArtifactValue(artifact.mainStatValue) ??
+        (artifact.slot === "Flower"
+          ? "4780"
+          : artifact.slot === "Plume"
+            ? "311"
+            : undefined),
+      substats: (artifact.substats ?? []).map((substat) => ({
+        ...substat,
+        value: normalizeSavedArtifactValue(substat.value),
+      })),
+    })),
+  }));
+}
+
+function normalizeCollections(collections: TeamCollection[]): TeamCollection[] {
+  return collections.map((collection) => ({
+    ...collection,
+    team: normalizeTeam(collection.team),
+  }));
+}
+
 function App() {
   const [, setTeam] = useState<CharacterBuild[]>(placeholderTeam);
   const [characters, setCharacters] = useState<DatabaseCharacter[]>([]);
@@ -404,7 +664,9 @@ function App() {
     const savedCollections = localStorage.getItem("genshin-dps-collections");
 
     if (savedCollections) {
-      const parsedCollections: TeamCollection[] = JSON.parse(savedCollections);
+      const parsedCollections: TeamCollection[] = normalizeCollections(
+        JSON.parse(savedCollections)
+      );
 
       setCollections(parsedCollections);
 
@@ -563,6 +825,83 @@ function App() {
     setRenamingCollectionId(collection.id);
     setRenameValue(collection.name);
     setOpenMenuCollectionId(null);
+  }
+
+  function handleCollectionArtifactMainStatChange(
+    collectionId: string,
+    characterIndex: number,
+    slot: ArtifactSlot,
+    mainStatType: string,
+    mainStatValue: string | undefined
+  ) {
+    const collection = collections.find(
+      (currentCollection) => currentCollection.id === collectionId
+    );
+
+    if (!collection) return;
+
+    const nextTeam = collection.team.map((character, index) => {
+      if (index !== characterIndex) return character;
+
+      return {
+        ...character,
+        artifacts: character.artifacts.map((artifact) =>
+          artifact.slot === slot
+            ? {
+                ...artifact,
+                mainStatType,
+                mainStatValue,
+              }
+            : artifact
+        ),
+      };
+    });
+
+    setActiveCollectionId(collectionId);
+    setTeam(nextTeam);
+    updateCollectionTeam(collectionId, nextTeam);
+  }
+
+  function handleCollectionArtifactSubstatChange(
+    collectionId: string,
+    characterIndex: number,
+    slot: ArtifactSlot,
+    substatIndex: number,
+    type: string,
+    value: string | undefined
+  ) {
+    const collection = collections.find(
+      (currentCollection) => currentCollection.id === collectionId
+    );
+
+    if (!collection) return;
+
+    const nextTeam = collection.team.map((character, index) => {
+      if (index !== characterIndex) return character;
+
+      return {
+        ...character,
+        artifacts: character.artifacts.map((artifact) => {
+          if (artifact.slot !== slot) return artifact;
+
+          const nextSubstats = [...(artifact.substats ?? [])];
+
+          nextSubstats[substatIndex] = {
+            type,
+            value,
+          };
+
+          return {
+            ...artifact,
+            substats: nextSubstats,
+          };
+        }),
+      };
+    });
+
+    setActiveCollectionId(collectionId);
+    setTeam(nextTeam);
+    updateCollectionTeam(collectionId, nextTeam);
   }
 
   function handleFinishRename(collectionId: string) {
@@ -947,6 +1286,25 @@ function App() {
                           index,
                           slot,
                           artifactSetId
+                        )
+                      }
+                      onArtifactMainStatChange={(slot, mainStatType, mainStatValue) =>
+                        handleCollectionArtifactMainStatChange(
+                          collection.id,
+                          index,
+                          slot,
+                          mainStatType,
+                          mainStatValue
+                        )
+                      }
+                      onArtifactSubstatChange={(slot, substatIndex, type, value) =>
+                        handleCollectionArtifactSubstatChange(
+                          collection.id,
+                          index,
+                          slot,
+                          substatIndex,
+                          type,
+                          value
                         )
                       }
                     />
